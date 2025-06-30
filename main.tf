@@ -32,7 +32,7 @@ resource "aws_iam_role" "glue_role" {
             {
                 Action = "sts:AssumeRole"
                 Effect = "Allow"
-                Sid    = "data-segmentation-glue-role"
+                Sid    = "AssumeGlueRole"
                 Principal = {
                     Service = "glue.amazonaws.com"
                 }
@@ -55,7 +55,6 @@ resource "aws_glue_job" "data_segmentation_job" {
     python_version  = "3"
   }
   glue_version      = "4.0"
-  max_capacity      = 2
   number_of_workers = 2
   worker_type       = "G.1X"
   execution_property {
@@ -63,28 +62,6 @@ resource "aws_glue_job" "data_segmentation_job" {
   }
   tags = {
     Environment = "dev"
-  }
-}
-
-resource "aws_s3_bucket" "tf_state" {
-  bucket = "dev-infra-sandbox-terraform-state"
-  force_destroy = true
-}
-
-resource "aws_s3_bucket_versioning" "tf_state_versioning" {
-  bucket = aws_s3_bucket.tf_state.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_dynamodb_table" "tf_state_lock" {
-  name           = "dev-infra-terraform-state-lock"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "LockID"
-  attribute {
-    name = "LockID"
-    type = "S"
   }
 }
 
