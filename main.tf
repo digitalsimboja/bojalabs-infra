@@ -1,5 +1,15 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 provider "aws" {
     region = var.region
+    profile = "dev"
 }
 
 resource "aws_s3_bucket" "data_segmentation_scripts" {
@@ -10,8 +20,8 @@ resource "aws_s3_bucket" "data_segmentation_scripts" {
 resource "aws_s3_object" "glue_script" {
     bucket = aws_s3_bucket.data_segmentation_scripts.id
     key = "glue_scripts/data-segmentation.py"
-    source = "${path.module}/glue_script/data-segmentation.py}"
-    etag = filemd5("${path.module}/glue_script/data-segmentation.py")
+    source = "${path.module}/glue_scripts/data-segmentation.py"
+    etag = filemd5("${path.module}/glue_scripts/data-segmentation.py")
 }
 
 resource "aws_iam_role" "glue_role" {
@@ -22,7 +32,7 @@ resource "aws_iam_role" "glue_role" {
             {
                 Action = "sts:AssumeRole"
                 Effect = "Allow"
-                Sid    = ""
+                Sid    = "data-segmentation-glue-role"
                 Principal = {
                     Service = "glue.amazonaws.com"
                 }
@@ -37,24 +47,44 @@ resource "aws_iam_role_policy_attachment" "glue_service" {
 }
 
 resource "aws_glue_job" "data_segmentation_job" {
-    name = "data-segmentation-job"
-    role = aws_iam_role.glue_role.arn
-    command {
-        name = "glueetl"
-        script_location = "s3://${aws_s3_bucket.data_segmentation_scripts.bucket}/${aws_s3_object.glue_script.key}"
-        python_version  = "3"
-    }
-
-    default_arguments = {
-        "--job-language"   = "python"
-        "--TempDir"        = "s3://${var.s3_glue_temp_bucket_name}/glue-temp/"
-        "--enable-metrics" = "true"
-    }
-
-    glue_version = "4.0"
-    number_of_workers = 1
-    worker_type = "G.1X"
-    excecution_class = "STANDARD"
-    max_retries = 1
-    timeout = 120
+  name     = "data-segmentation-job"
+  role_arn = aws_iam_role.glue_role.arn
+  command {
+    name            = "glueetl"
+    script_location = "s3://${aws_s3_bucket.data_segmentation_scripts.bucket}/glue_scripts/data-segmentation.py"
+    python_version  = "3"
+  }
+  glue_version      = "4.0"
+  max_capacity      = 2
+  number_of_workers = 2
+  worker_type       = "G.1X"
+  execution_property {
+    max_concurrent_runs = 1
+  }
+  tags = {
+    Environment = "dev"
+  }
 }
+
+resource "aws_s3_bucket" "tf_state" {
+  bucket = "dev-infra-sandbox-terraform-state"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_versioning" "tf_state_versioning" {
+  bucket = aws_s3_bucket.tf_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_dynamodb_table" "tf_state_lock" {
+  name           = "dev-infra-terraform-state-lock"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "LockID"
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+}
+
