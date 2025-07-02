@@ -13,3 +13,11 @@ output "segmentation_glue_job_name" {
 output "segmentation_glue_script_location" {
   value = "s3://${aws_s3_bucket.data_categorization_script.bucket}/${aws_s3_object.segmentation_script.key}"
 }
+
+output "file_metadata_table_name" {
+  value = aws_dynamodb_table.data_categorization_file_metadata
+}
+
+output "file_metadata_table_arn" {
+  value = aws_dynamodb_table.data_categorization_file_metadata.arn
+}

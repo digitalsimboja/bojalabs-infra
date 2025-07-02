@@ -54,6 +54,35 @@ resource "aws_iam_role_policy_attachment" "glue_service" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
 }
 
+# IAM policy for DynamoDB access
+resource "aws_iam_policy" "dynamodb_access" {
+  name        = "data-categorization-dynamodb-access"
+  description = "Policy for accessing DynamoDB file metadata table"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = aws_dynamodb_table.data_categorization_file_metadata.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "dynamodb_access" {
+  role       = aws_iam_role.glue_role.name
+  policy_arn = aws_iam_policy.dynamodb_access.arn
+}
+
 resource "aws_glue_job" "categorize_data_job" {
   name     = "data-categorization-job"
   role_arn = aws_iam_role.glue_role.arn
@@ -90,6 +119,23 @@ resource "aws_glue_job" "segment_data_job" {
   }
   tags = {
     Environment = "dev"
+  }
+}
+
+# DynamoDB table for storing file metadata
+resource "aws_dynamodb_table" "data_categorization_file_metadata" {
+  name           = "data-categorization-file-metadata"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "file_id"
+
+  attribute {
+    name = "file_id"
+    type = "S"
+  }
+
+  tags = {
+    Environment = "dev"
+    Purpose     = "file-metadata-storage"
   }
 }
 
