@@ -120,6 +120,34 @@ resource "aws_iam_policy" "s3_access" {
   })
 }
 
+# IAM policy for Lambda function invocation
+resource "aws_iam_policy" "lambda_invoke" {
+  name        = "data-categorization-lambda-invoke"
+  description = "Policy for invoking Lambda functions from Glue jobs"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          "arn:aws:lambda:eu-west-1:475453938538:function:data-segmentation-api-dev-data-categorization-bedrock-api",
+          "arn:aws:lambda:eu-west-1:475453938538:function:data-categorization-bedrock-api",
+          "arn:aws:lambda:eu-west-1:475453938538:function:data-categorization-api"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_invoke" {
+  role       = aws_iam_role.glue_role.name
+  policy_arn = aws_iam_policy.lambda_invoke.arn
+}
+
 resource "aws_iam_role_policy_attachment" "dynamodb_access" {
   role       = aws_iam_role.glue_role.name
   policy_arn = aws_iam_policy.dynamodb_access.arn
