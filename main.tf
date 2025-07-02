@@ -24,13 +24,9 @@ resource "aws_s3_object" "categorization_script" {
   etag   = filemd5("${path.module}/glue_scripts/categorize.py")
 }
 
-resource "aws_s3_bucket" "data_segmentation_script" {
-  bucket        = var.s3_segemtation_bucket_name
-  force_destroy = true
-}
 
 resource "aws_s3_object" "segmentation_script" {
-  bucket = aws_s3_bucket.data_segmentation_script.id
+  bucket = aws_s3_bucket.data_categorization_script.id
   key    = "glue_scripts/segment.py"
   source = "${path.module}/glue_scripts/segment.py"
   etag   = filemd5("${path.module}/glue_scripts/segment.py")
@@ -83,7 +79,7 @@ resource "aws_glue_job" "segment_data_job" {
   role_arn = aws_iam_role.glue_role.arn
   command {
     name            = "glueetl"
-    script_location = "s3://${aws_s3_bucket.data_segmentation_script.bucket}/glue_scripts/segment.py"
+    script_location = "s3://${aws_s3_bucket.data_categorization_script.bucket}/glue_scripts/segment.py"
     python_version  = "3"
   }
   glue_version      = "4.0"
