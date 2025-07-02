@@ -85,22 +85,6 @@ print(f"Lambda function response: {response_payload}")
 # }
 
 
-# Store the generated glue script in S3
-
-script_path = response_payload["s3_script_path"]
-key = script_path.split("/")[-1]
-
-s3_client = boto3.client("s3")
-s3_client.put_object(
-    Bucket=bucket_name,
-    Key=key,
-    Body=response_payload["generated_glue_script"],
-    ContentType="text/x-python"
-)
-
-print("Uploaded generated script and suggestions to S3:")
-print(f"- Script: s3://{bucket_name}/{script_path}")
-
 job.commit()
 
 

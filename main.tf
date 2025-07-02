@@ -17,6 +17,11 @@ resource "aws_s3_bucket" "data_categorization_script" {
   force_destroy = true
 }
 
+resource "aws_s3_bucket" "data_categorization_temp" {
+  bucket        = var.s3_glue_temp_bucket_name
+  force_destroy = true
+}
+
 resource "aws_s3_object" "categorization_script" {
   bucket = aws_s3_bucket.data_categorization_script.id
   key    = "glue_scripts/categorize.py"
@@ -78,9 +83,51 @@ resource "aws_iam_policy" "dynamodb_access" {
   })
 }
 
+# IAM policy for S3 access
+resource "aws_iam_policy" "s3_access" {
+  name        = "data-categorization-s3-access"
+  description = "Policy for accessing S3 buckets for Glue scripts and temp data"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.data_categorization_script.arn,
+          "${aws_s3_bucket.data_categorization_script.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          "arn:aws:s3:::data-categorization-temp",
+          "arn:aws:s3:::data-categorization-temp/*"
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "dynamodb_access" {
   role       = aws_iam_role.glue_role.name
   policy_arn = aws_iam_policy.dynamodb_access.arn
+}
+
+resource "aws_iam_role_policy_attachment" "s3_access" {
+  role       = aws_iam_role.glue_role.name
+  policy_arn = aws_iam_policy.s3_access.arn
 }
 
 resource "aws_glue_job" "categorize_data_job" {
@@ -94,13 +141,19 @@ resource "aws_glue_job" "categorize_data_job" {
   glue_version      = "4.0"
   number_of_workers = 2
   worker_type       = "G.1X"
+  
+  default_arguments = {
+    "--additional-python-modules" = "openpyxl==3.1.2,pandas==2.0.3,boto3==1.34.0"
+    "--job-bookmark-option"       = "job-bookmark-disable"
+    "--job-language"              = "python"
+  }
+  
   execution_property {
     max_concurrent_runs = 1
   }
   tags = {
     Environment = "dev"
   }
-
 }
 
 resource "aws_glue_job" "segment_data_job" {
@@ -114,6 +167,13 @@ resource "aws_glue_job" "segment_data_job" {
   glue_version      = "4.0"
   number_of_workers = 2
   worker_type       = "G.1X"
+  
+  default_arguments = {
+    "--additional-python-modules" = "openpyxl==3.1.2,pandas==2.0.3,boto3==1.34.0"
+    "--job-bookmark-option"       = "job-bookmark-disable"
+    "--job-language"              = "python"
+  }
+  
   execution_property {
     max_concurrent_runs = 1
   }
