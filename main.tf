@@ -54,9 +54,36 @@ resource "aws_iam_role" "glue_role" {
   })
 }
 
+
+
 resource "aws_iam_role_policy_attachment" "glue_service" {
   role       = aws_iam_role.glue_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+}
+resource "aws_iam_policy" "bedrock_invoke" {
+  name        = "data-categorization-bedrock-access"
+  description = "Allows invoking Claude models via Bedrock"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        Resource = [
+          "arn:aws:bedrock:eu-west-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "bedrock_invoke" {
+  role       = aws_iam_role.glue_role.name
+  policy_arn = aws_iam_policy.bedrock_invoke.arn
 }
 
 # IAM policy for DynamoDB access

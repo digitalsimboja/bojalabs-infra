@@ -134,12 +134,29 @@ try:
 
     # Prepare payload for Lambda function
     logger.info("Preparing payload for Lambda function...")
+    
+    # Ensure all data is JSON serializable by converting datetime objects to strings
+    def make_json_serializable(obj):
+        if isinstance(obj, dict):
+            return {k: make_json_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [make_json_serializable(item) for item in obj]
+        elif hasattr(obj, 'isoformat'):  # datetime objects
+            return obj.isoformat()
+        elif hasattr(obj, 'strftime'):  # date objects
+            return obj.strftime('%Y-%m-%d')
+        else:
+            return obj
+    
+    # Clean sample data to ensure JSON serialization
+    cleaned_sample_data = make_json_serializable(sample_data)
+    
     payload = {
-        "data": sample_data,
+        "data": cleaned_sample_data,
         "schema": schema,
         "file_name": S3_FILE_PATH
     }
-    logger.info(f"Payload prepared with {len(sample_data)} sample records and {len(schema)} columns")
+    logger.info(f"Payload prepared with {len(cleaned_sample_data)} sample records and {len(schema)} columns")
 
     # Invoke Lambda function
     logger.info(f"Invoking Lambda function: {LAMBDA_FUNCTION_NAME}")
