@@ -140,14 +140,49 @@ try:
             s3_client.download_file(bucket_name, key, temp_file_path)
             logger.info("File downloaded successfully from S3")
 
-            # Read Excel file
-            df = pd.read_excel(temp_file_path)
-            total_rows = len(df)
-            logger.info(f"Successfully read Excel file with {total_rows} rows")
+            # Read Excel file with header detection
+            logger.info("Reading Excel file to detect proper header row...")
+            
+            # First, read without headers to inspect rows
+            df_raw = pd.read_excel(temp_file_path, header=None)
+            logger.info(f"Raw Excel data shape: {df_raw.shape}")
+            
+            # Get first few rows to find the header
+            sample_rows = df_raw.head(10)
+            logger.info(f"Inspecting first {len(sample_rows)} rows for proper headers...")
+            
+            # Find the row with proper column names (not "Unnamed" or empty)
+            header_row_index = None
+            for i, row in sample_rows.iterrows():
+                row_values = [str(val) if pd.notna(val) else "" for val in row.values]
+                logger.info(f"Row {i}: {row_values}")
+                
+                # Check if this row has proper column names
+                has_proper_headers = True
+                for val in row_values:
+                    if val.strip() == "" or val.startswith("Unnamed:") or val.lower() in ["", "nan", "null", "none"]:
+                        has_proper_headers = False
+                        break
+                
+                if has_proper_headers and len([v for v in row_values if v.strip()]) > 0:
+                    header_row_index = i
+                    logger.info(f"Found proper header at row {i}: {row_values}")
+                    break
+            
+            if header_row_index is None:
+                logger.warning("No proper header row found, using first row as header")
+                header_row_index = 0
+            
+            # Read Excel with the detected header row
+            logger.info(f"Reading Excel with header at row {header_row_index}")
+            df = pd.read_excel(temp_file_path, header=header_row_index)
             
             # Clean data
             df.fillna("", inplace=True)
             logger.info("Data cleaned - null values replaced with empty strings")
+            
+            total_rows = len(df)
+            logger.info(f"Successfully read Excel file with {total_rows} rows")
             
             # Get sample data
             sample_data = df.head(10).to_dict(orient="records")
