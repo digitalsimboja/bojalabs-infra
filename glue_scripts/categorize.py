@@ -60,9 +60,51 @@ try:
     if file_extension == "csv":
         logger.info("Reading CSV file from S3...")
         
-        # Read CSV with error handling
+        # Read CSV with error handling and header detection
         try:
-            df = spark.read.format("csv").option("header", "true").load(S3_FILE_PATH)
+            # First, read the CSV without header to inspect rows
+            logger.info("Reading CSV file to detect proper header row...")
+            df_raw = spark.read.format("csv").option("header", "false").load(S3_FILE_PATH)
+            
+            # Get first few rows to find the header
+            sample_rows = df_raw.head(10)
+            logger.info(f"Inspecting first {len(sample_rows)} rows for proper headers...")
+            
+            # Find the row with proper column names (not "Unnamed" or empty)
+            header_row_index = None
+            for i, row in enumerate(sample_rows):
+                row_values = [str(val) if val is not None else "" for val in row]
+                logger.info(f"Row {i}: {row_values}")
+                
+                # Check if this row has proper column names
+                has_proper_headers = True
+                for val in row_values:
+                    if val.strip() == "" or val.startswith("Unnamed:") or val.lower() in ["", "nan", "null", "none"]:
+                        has_proper_headers = False
+                        break
+                
+                if has_proper_headers and len([v for v in row_values if v.strip()]) > 0:
+                    header_row_index = i
+                    logger.info(f"Found proper header at row {i}: {row_values}")
+                    break
+            
+            if header_row_index is None:
+                logger.warning("No proper header row found, using first row as header")
+                header_row_index = 0
+            
+            # Read CSV with the detected header row
+            logger.info(f"Reading CSV with header at row {header_row_index}")
+            df = spark.read.format("csv").option("header", "false").option("skip", header_row_index).load(S3_FILE_PATH)
+            
+            # Rename columns based on the detected header row
+            header_row = sample_rows[header_row_index]
+            column_names = [str(val) if val is not None else f"column_{i}" for i, val in enumerate(header_row)]
+            logger.info(f"Column names: {column_names}")
+            
+            # Apply column names
+            for i, col_name in enumerate(column_names):
+                df = df.withColumnRenamed(f"_c{i}", col_name)
+            
             total_rows = df.count()
             logger.info(f"Successfully read CSV file with {total_rows} rows")
             
