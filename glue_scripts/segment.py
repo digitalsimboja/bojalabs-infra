@@ -199,6 +199,37 @@ try:
     summary_output_path = f"{s3_output_path}/summary"
     summary_df.write.mode("overwrite").json(summary_output_path)
     
+    # Store results in DynamoDB
+    try:
+        import boto3
+        from boto3.dynamodb.conditions import Key
+        
+        # Create DynamoDB client
+        dynamodb = boto3.resource('dynamodb', region_name='eu-west-1')
+        table = dynamodb.Table('data-categorization-file-metadata')
+        
+        # Extract file name from S3 path
+        file_name = s3_input_path.split('/')[-1]
+        
+        # Store segmentation results
+        table.put_item(Item={
+            'file_id': f"{file_name}_{datetime.now().isoformat()}",
+            'file_name': file_name,
+            'timestamp': datetime.now().isoformat(),
+            'job_name': args['JOB_NAME'],
+            'segmentation_criteria': segmentation_criteria,
+            'output_path': s3_output_path,
+            'total_records': df.count(),
+            'segments_created': list(segmentation_criteria.get('segments', {}).keys()),
+            'schema': [field.name for field in df.schema.fields],
+            'segmented_rows': []  # This would be populated with actual segmented data if needed
+        })
+        
+        print("Segmentation results stored in DynamoDB successfully!")
+        
+    except Exception as e:
+        print(f"Warning: Failed to store results in DynamoDB: {str(e)}")
+    
     print("Segmentation job completed successfully!")
     print(f"Summary: {summary_stats}")
     
